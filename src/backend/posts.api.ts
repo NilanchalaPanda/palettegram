@@ -8,68 +8,63 @@ import {
   postBucketStorage,
 } from "./appwrite.config";
 
+type PostData = any; // Replace 'any' with a specific type for post data if available
+type CommentData = any; // Replace 'any' with a specific type for comments if available
+
 /**
- * @description Save a single post to database
- * @param data
- * @returns
+ * @description Save a single post to the database
+ * @param data - Post data to be saved
+ * @returns Saved post document or null if error
  */
-const savePostToDb = async (data: any) => {
+const savePostToDb = async (data: PostData) => {
   try {
     const post = await db.createDocument(palettegramDB, postsCollection, ID.unique(), data);
-    if (!post) {
-      throw new Error("Error in uploading data into database");
-    }
-
-    return post;
-  } catch (error: any) {
-    console.log(error);
+    return post || null; // Return null if post creation fails
+  } catch (error) {
+    console.error("Error saving post to database:", error);
+    return null; // Return null in case of error
   }
 };
 
 /**
- * @description get all posts present in the database
- * @returns posts
+ * @description Get all posts from the database
+ * @returns List of posts or null if error
  */
 const getAllPosts = async () => {
   try {
     if (!palettegramDB || !postsCollection) {
-      throw new Error("Either databaseId or collectionId is not provided");
+      throw new Error("Database ID or collection ID is not provided");
     }
 
     const posts = await db.listDocuments(palettegramDB, postsCollection, [
       Query.orderDesc("$createdAt"),
     ]);
 
-    if (!posts) {
-      throw new Error("Error fetching data");
-    }
-
-    return posts;
-  } catch (error: any) {
-    console.log(error);
+    return posts?.documents || null; // Return null if no posts found
+  } catch (error) {
+    console.error("Error fetching all posts:", error);
+    return null;
   }
 };
 
 /**
- * @description gets single document based on the id
- * @param id
- * @returns
+ * @description Get a single document by ID
+ * @param id - Document ID
+ * @returns Document or null if not found or error
  */
 const getSinglePost = async (id: string) => {
   try {
-    const tweets = await db.getDocument(palettegramDB, postsCollection, id);
-    if (tweets) {
-      return tweets;
-    }
-  } catch (error: any) {
-    console.log(error);
+    return await db.getDocument(palettegramDB, postsCollection, id) || null;
+  } catch (error) {
+    console.error(`Error fetching post with ID ${id}:`, error);
+    return null;
   }
 };
 
 /**
- * @description get user post based on account id
- * @param userId
- * @returns
+ * @description Get all posts by a specific user
+ * @param userId - User ID to filter posts
+ * @returns List of user posts or null if error
  */
 const getAllUserPosts = async (userId: string) => {
   try {
@@ -78,109 +73,100 @@ const getAllUserPosts = async (userId: string) => {
       Query.orderDesc("$createdAt"),
     ]);
 
-    if (!allPosts) {
-      throw new Error("could not find posts");
-    }
-
-    return allPosts?.documents;
-  } catch (error: any) {
-    console.log(error);
+    return allPosts?.documents || null; // Return null if no posts found
+  } catch (error) {
+    console.error(`Error fetching posts for user ${userId}:`, error);
+    return null;
   }
 };
 
+/**
+ * @description Remove a post by setting isActive to false
+ * @param id - Document ID
+ * @returns Updated document or null if error
+ */
 const removePost = async (id: string) => {
   try {
-    const resp = await db.updateDocument(palettegramDB, postsCollection, id, {
-      isActive: false,
-    });
-    if (resp) {
-      return resp;
-    }
-  } catch (error: any) {
-    console.log(error);
+    return await db.updateDocument(palettegramDB, postsCollection, id, { isActive: false }) || null;
+  } catch (error) {
+    console.error(`Error removing post with ID ${id}:`, error);
+    return null;
   }
 };
 
 /**
- * @description like tweet api
- * @param tweet
- * @returns
+ * @description Like a post
+ * @param tweet - Post data including likes
+ * @returns Updated post or null if error
  */
-const likeTweet = async (tweet: any) => {
+const likeTweet = async (tweet: PostData) => {
   try {
-    const tweets = await db.updateDocument(palettegramDB, postsCollection, tweet.$id, {
+    return await db.updateDocument(palettegramDB, postsCollection, tweet.$id, {
       likes: tweet.likes,
-    });
-    if (tweets) {
-      return tweets;
-    }
-  } catch (error: any) {
-    console.log(error);
+    }) || null;
+  } catch (error) {
+    console.error(`Error liking tweet with ID ${tweet.$id}:`, error);
+    return null;
   }
 };
 
 /**
- * @description image adding api. Save image into bucket
- * @param image
- * @returns
+ * @description Add a new image to storage
+ * @param image - Image file to be uploaded
+ * @returns Uploaded image file or null if error
  */
 const addNewImage = async (image: any) => {
   try {
     const resImage = await storage.createFile(postBucketStorage, ID.unique(), image);
-    if (!resImage) {
-      throw new Error("File not found");
-    }
-    return resImage;
-  } catch (error: any) {
-    console.log(error);
+    return resImage || null; // Return null if image upload fails
+  } catch (error) {
+    console.error("Error adding new image:", error);
+    return null;
   }
 };
 
 /**
- * @description get image url from bucket
- * @param imageId
- * @returns
+ * @description Get image URL from storage
+ * @param imageId - Image ID
+ * @returns Image URL or null if error
  */
 const getImageUrl = (imageId: string) => {
-  try {
-    if (!imageId) {
-      throw new Error("Image can not be uploaded");
-    }
-
-    const url = `https://cloud.appwrite.io/v1/storage/buckets/${postBucketStorage}/files/${imageId}/view?project=${process.env.NEXT_PUBLIC_PROJECT_ID}`;
-
-    return url;
-  } catch (error) {
-    console.log(error);
+  if (!imageId) {
+    console.error("Image ID is required to generate URL");
+    return null;
   }
+
+  return `https://cloud.appwrite.io/v1/storage/buckets/${postBucketStorage}/files/${imageId}/view?project=${process.env.NEXT_PUBLIC_PROJECT_ID}`;
 };
 
 /**
- * @description delete image from bucket
- * @param id
- * @returns
+ * @description Delete an image from storage
+ * @param id - Image ID
+ * @returns Deletion response or null if error
  */
 const deleteImage = async (id: string) => {
   try {
-    const resImage = await storage.deleteFile(postBucketStorage, id);
-    if (resImage) {
-      return resImage;
-    }
-  } catch (error: any) {
-    console.log(error);
+    return await storage.deleteFile(postBucketStorage, id) || null; // Return null if deletion fails
+  } catch (error) {
+    console.error(`Error deleting image with ID ${id}:`, error);
+    return null;
   }
 };
 
-const addComment = async (id: string, comment: any) => {
+/**
+ * @description Add a comment to a post
+ * @param id - Post ID
+ * @param comment - Comment data
+ * @returns Updated post or null if error
+ */
+const addComment = async (id: string, comment: CommentData) => {
   try {
-    const res = await db.updateDocument(palettegramDB, postsCollection, id, {
+    return await db.updateDocument(palettegramDB, postsCollection, id, {
       comments: comment,
-    });
-    if (res) {
-      return res;
-    }
-  } catch (error: any) {
-    console.log(error);
+    }) || null; // Return null if comment addition fails
+  } catch (error) {
+    console.error(`Error adding comment to post with ID ${id}:`, error);
+    return null;
   }
 };
 
