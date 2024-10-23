@@ -2,101 +2,84 @@
 
 import { account, db, ID, Query, palettegramDB, bookmarksCollection } from "./appwrite.config";
 
+type BookmarkData = {
+  userId: string;
+  postId: string[];
+};
+
 /**
- * @abstract filtering bookmarks
- * @param {string[]} bookmarks
- * @param {string} postId
- * @returns {string[]}
+ * @description Remove a postId from an array of bookmarks
+ * @param {string[]} bookmarks - Current array of bookmarks
+ * @param {string} postId - Post ID to remove
+ * @returns {string[]} - Updated array of bookmarks
  */
-const removePostIdFromBookmarks = function (bookmarks: string[], postId: string): string[] {
-  let idx = bookmarks.indexOf(postId);
-
-  let beforeIdx = bookmarks.slice(0, idx);
-
-  let afterIdx = bookmarks.slice(idx + 1, bookmarks.length);
-
-  return [...beforeIdx, ...afterIdx];
+const removePostIdFromBookmarks = (bookmarks: string[], postId: string): string[] => {
+  return bookmarks.filter(id => id !== postId);
 };
 
 const getBookmarks = async (userId: string) => {
   try {
-    const getSavedBookmarkData = await db.listDocuments(palettegramDB, bookmarksCollection, [
+    const result = await db.listDocuments(palettegramDB, bookmarksCollection, [
       Query.equal("userId", userId),
     ]);
-    // console.log(getSavedBookmarkData);
-    return getSavedBookmarkData;
+
+    return result.documents[0] || null; // Return the first document or null if not found
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching bookmarks:", error);
+    throw new Error("Failed to fetch bookmarks.");
   }
 };
 
 const saveBookmark = async (userId: string, postId: string) => {
   try {
-    const getSavedBookmarkData = await getBookmarks(userId);
-    console.log(getSavedBookmarkData);
-    if (!getSavedBookmarkData) {
-      throw new Error("Account does not exist");
+    const bookmarkData = await getBookmarks(userId);
+    if (!bookmarkData) {
+      return createBookmarkEntry(userId, postId); // Create a new entry if none exists
     }
 
-    const documentId = getSavedBookmarkData.documents[0].$id;
-    let oldBookmarkArray = getSavedBookmarkData.documents[0].postId;
-
-    oldBookmarkArray.push(postId);
-
-    const updatedData = await db.updateDocument(palettegramDB, bookmarksCollection, documentId, {
-      postId: oldBookmarkArray,
-    });
-
-    if (!updatedData) {
-      throw new Error();
-    }
-
-    return updatedData;
+    const updatedPostIds = [...bookmarkData.postId, postId];
+    return await updateBookmark(bookmarkData.$id, updatedPostIds);
   } catch (error) {
-    throw new Error();
+    console.error("Error saving bookmark:", error);
+    throw new Error("Failed to save bookmark.");
   }
 };
 
 const removeBookmark = async (userId: string, postId: string) => {
   try {
-    const getSavedBookmarkData = await getBookmarks(userId);
-    if (!getSavedBookmarkData) {
-      throw new Error("Account does not exist");
+    const bookmarkData = await getBookmarks(userId);
+    if (!bookmarkData) {
+      throw new Error("No bookmarks found for this user.");
     }
 
-    const documentId = getSavedBookmarkData.documents[0].$id;
-    let oldBookmarkArray = getSavedBookmarkData.documents[0].postId;
-
-    let newBookmarkArray: string[] = removePostIdFromBookmarks(oldBookmarkArray, postId);
-
-    const updatedData = await db.updateDocument(palettegramDB, bookmarksCollection, documentId, {
-      postId: newBookmarkArray,
-    });
-
-    if (!updatedData) {
-      throw new Error();
-    }
-
-    return updatedData;
+    const updatedPostIds = removePostIdFromBookmarks(bookmarkData.postId, postId);
+    return await updateBookmark(bookmarkData.$id, updatedPostIds);
   } catch (error) {
-    throw new Error();
+    console.error("Error removing bookmark:", error);
+    throw new Error("Failed to remove bookmark.");
+  }
+};
+
+const updateBookmark = async (documentId: string, postIds: string[]) => {
+  try {
+    return await db.updateDocument(palettegramDB, bookmarksCollection, documentId, { postId: postIds });
+  } catch (error) {
+    console.error("Error updating bookmark:", error);
+    throw new Error("Failed to update bookmark.");
   }
 };
 
 const createBookmarkEntry = async (userId: string, postId: string) => {
   try {
-    const bookmarkDocs = await db.createDocument(palettegramDB, bookmarksCollection, ID.unique(), {
-      userId: userId,
+    const bookmarkDoc = await db.createDocument(palettegramDB, bookmarksCollection, ID.unique(), {
+      userId,
       postId: [postId],
     });
 
-    if (!bookmarkDocs) {
-      throw new Error("Account does not exist");
-    }
-
-    return bookmarkDocs;
+    return bookmarkDoc;
   } catch (error) {
-    throw new Error();
+    console.error("Error creating bookmark entry:", error);
+    throw new Error("Failed to create bookmark entry.");
   }
 };
 
